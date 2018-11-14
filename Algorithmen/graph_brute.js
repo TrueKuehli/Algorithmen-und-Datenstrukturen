@@ -96,7 +96,26 @@ for (let num = 1; num <= numOfNodes; num++) {
 
     let ham = new Hamilton(adjazenz);
     let result = ham.hamCycle()
-    if (result != '') console.log(result);
+    if (result != '') {
+      // Remove unconnected graphs
+      let r = [adjazenz[0]];
+      let y = [adjazenz[0]];
+      while (r.length >= 1) {
+        let row = r.splice(0, 1)[0];
+
+        for (let i = 0; i < row.length; i++) {
+          if (row[i] == 1) {
+            if (!y.includes(adjazenz[i])) {
+              y.push(adjazenz[i]);
+              r.push(adjazenz[i]);
+            }
+          }
+        }
+      }
+
+      if (y.length != adjazenz.length) continue;
+      console.log(result);
+    }
 
 
     // Output of the brutes:
