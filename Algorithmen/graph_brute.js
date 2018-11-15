@@ -1,3 +1,5 @@
+const cluster = require('cluster');
+
 class Hamilton {
   constructor(adjazenz) {
     this.g = adjazenz;
@@ -57,76 +59,105 @@ class Hamilton {
   }
 }
 
-let numOfNodes = 8;
+let numOfNodes = 10;
+let numProcesses = 12;
 
-for (let num = 1; num <= numOfNodes; num++) {
-  // Generate a whole f*ckton of graphs
-
-  let adjazenz = [];
-
-  for (let i = 0; i < num; i++) {
-    adjazenz.push(new Array(num));
+if (cluster.isMaster) {
+  // Master commands
+  for (let i = 0; i < numProcesses; i++) {
+    cluster.fork();
   }
 
-  let triangle = num * (num - 1) / 2;
-  for (let bin = 0; bin < Math.pow(2, triangle); bin++) {
-    let val = bin.toString(2).padStart(triangle, '0');
-    let index = 0;
+  let triangle = numOfNodes * (numOfNodes - 1) / 2;
+  let binMax = Math.pow(2, triangle);
+  let amtPerProcess = binMax / numProcesses;
+  let current = 0;
 
-    for (let i = 0; i < num; i++) {
+  for (const id in cluster.workers) {
+    cluster.workers[id].on('message', (msg) => {
+      if (msg.cmd == 'logResult') console.log(msg.result);
+    });
 
-      adjazenz[i][i] = '-';
+    cluster.workers[id].send({
+      cmd: 'instructions',
+      nodes: numOfNodes,
+      start: Math.floor(current),
+      end: current += amtPerProcess,
+      triangle: triangle,
+    });
+  }
+} else {
+  // Slave commands
 
-      for (let j = 0; j < i; j++) {
+  process.on('message', (msg) => {
+    if (msg.cmd == 'instructions') {
+      let num = msg.nodes;
 
-        adjazenz[i][j] = val[index];
-        adjazenz[j][i] = val[index++];
 
+      // Generate a whole f*ckton of graphs
+      let adjazenz = [];
+      for (let i = 0; i < num; i++) {
+        adjazenz.push(new Array(num));
       }
 
-    }
+      for (let bin = msg.start; bin < msg.end; bin++) {
+        let val = bin.toString(2).padStart(msg.triangle, '0');
+        let index = 0;
 
-    // Remove graphs with nodes of degree != 3
+        for (let i = 0; i < num; i++) {
 
-    if (adjazenz.some((row) => row.reduce((acc, elt) => acc + ((elt == '1') ? 1 : 0), 0) != 3)) {
-      continue;
-    }
+          adjazenz[i][i] = '-';
 
-    // Find hamiltonian clycles
+          for (let j = 0; j < i; j++) {
 
-    let ham = new Hamilton(adjazenz);
-    let result = ham.hamCycle()
-    if (result != '') {
-      // Remove unconnected graphs
-      let r = [adjazenz[0]];
-      let y = [adjazenz[0]];
-      while (r.length >= 1) {
-        let row = r.splice(0, 1)[0];
+            adjazenz[i][j] = val[index];
+            adjazenz[j][i] = val[index++];
 
-        for (let i = 0; i < row.length; i++) {
-          if (row[i] == 1) {
-            if (!y.includes(adjazenz[i])) {
-              y.push(adjazenz[i]);
-              r.push(adjazenz[i]);
+          }
+
+        }
+
+        // Remove graphs with nodes of degree != 3
+
+        if (adjazenz.some((row) => row.reduce((acc, elt) => acc + ((elt == '1') ? 1 : 0), 0) != 3)) {
+          continue;
+        }
+
+        // Find hamiltonian clycles
+
+        let ham = new Hamilton(adjazenz);
+        let result = ham.hamCycle()
+        if (result != '') {
+          // Remove unconnected graphs
+          let r = [adjazenz[0]];
+          let y = [adjazenz[0]];
+          while (r.length >= 1) {
+            let row = r.splice(0, 1)[0];
+
+            for (let i = 0; i < row.length; i++) {
+              if (row[i] == 1) {
+                if (!y.includes(adjazenz[i])) {
+                  y.push(adjazenz[i]);
+                  r.push(adjazenz[i]);
+                }
+              }
             }
           }
+
+          if (y.length != adjazenz.length) continue;
+          process.send({cmd: 'logResult', result});
         }
+
+
+        // Output of the brutes:
+
+        // let str = '';
+        // for (let row of adjazenz) {
+        //   str += row.join(' ') + '\n';
+        // }
+
+        // console.log(str);
       }
-
-      if (y.length != adjazenz.length) continue;
-      console.log(result);
     }
-
-
-    // Output of the brutes:
-
-    // let str = '';
-    // for (let row of adjazenz) {
-    //   str += row.join(' ') + '\n';
-    // }
-
-    // console.log(str);
-
-  }
-
+  });
 }
