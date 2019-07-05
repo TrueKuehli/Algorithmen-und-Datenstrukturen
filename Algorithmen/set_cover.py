@@ -4,6 +4,7 @@ def argmax_sets(elements, intersect_with):
   for i in range(len(elements)):
     s = elements[i]
     if len(s.intersection(intersect_with)) > maximum:
+      maximum = len(s.intersection(intersect_with))
       argmax = s
   return argmax
     
